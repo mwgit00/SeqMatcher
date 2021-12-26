@@ -32,7 +32,7 @@
 #include "WinExTmr.h"
 
 
-void dump(const std::vector<char>& rv1, std::vector<char>& rv2)
+void dump_grid(const std::vector<char>& rv1, std::vector<char>& rv2)
 {
     std::cout << "  ";
     for (const auto& c1 : rv1)
@@ -49,6 +49,27 @@ void dump(const std::vector<char>& rv1, std::vector<char>& rv2)
             std::cout << ((c1 == c2) ? '@' : '+');
         }
         std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+
+void dump_match(
+    const size_t maxlen,
+    const sequtil::T_PT& rpt,
+    const std::vector<char>& rv1,
+    const std::vector<char>& rv2)
+{
+    std::cout << rpt.row << "," << rpt.col;
+    std::cout << "  ";
+    for (size_t ii = rpt.row + 1 - maxlen; ii <= rpt.row; ii++)
+    {
+        std::cout << rv2[ii];
+    }
+    std::cout << " ";
+    for (size_t ii = rpt.col + 1 - maxlen; ii <= rpt.col; ii++)
+    {
+        std::cout << rv1[ii];
     }
     std::cout << std::endl;
 }
@@ -73,53 +94,41 @@ void test_random_char(
     std::vector<char> v1(n1);
     std::vector<char> v2(n2);
 
-    for (size_t ii = 0; ii < n1; ii++) v1[ii] = 'A' + (rand() % sym_ct);
-    for (size_t ii = 0; ii < n2; ii++) v2[ii] = 'A' + (rand() % sym_ct);
+    if (n1 < n2)
+    {
+        for (size_t ii = 0; ii < n1; ii++) v1[ii] = 'A' + (rand() % sym_ct);
+        for (size_t ii = 0; ii < n2; ii++) v2[ii] = 'A' + (rand() % sym_ct);
+    }
+    else
+    {
+        for (size_t ii = 0; ii < n2; ii++) v2[ii] = 'A' + (rand() % sym_ct);
+        for (size_t ii = 0; ii < n1; ii++) v1[ii] = 'A' + (rand() % sym_ct);
+    }
 
     if (is_dump)
     {
-        dump(v1, v2);
+        dump_grid(v1, v2);
     }
 
+    WinExTmr extmr;
+    sequtil::T_MAP_SZ2PT result;
+    extmr.start();
+    seqx.find_max(v1, v2, result);
+    extmr.stop();
+    std::cout << extmr.elapsed_time() << std::endl;
+
+    std::cout << "Max Map Sz = " << seqx.max_map_size << std::endl;
+    const auto& qlast = result.crbegin();
+    size_t maxlen = qlast->first;
+    std::cout << "Max Length = " << maxlen << std::endl;
+    for (const auto qpt : qlast->second)
     {
-        // map (tree)
-        WinExTmr extmr;
-        sequtil::T_MAP_SZ2PT result;
-        extmr.start();
-        seqx.run_max(v1, v2, result);
-        extmr.stop();
-        std::cout << extmr.elapsed_time() << std::endl;
-
-        std::cout << "Max Map Sz = " << seqx.max_map_size << std::endl;
-        const auto& qlast = result.crbegin();
-        std::cout << "Max Length = " << qlast->first << std::endl;
-        for (const auto qpt : qlast->second)
-        {
-            std::cout << qpt.row << "," << qpt.col << std::endl;
-        }
-    }
-
-    {
-        // unordered map (hash)
-        WinExTmr extmr;
-        sequtil::T_MAP_SZ2PT result;
-        extmr.start();
-        seqx.run_max2(v1, v2, result);
-        extmr.stop();
-        std::cout << extmr.elapsed_time() << std::endl;
-
-        std::cout << "Max Map Sz = " << seqx.max_map_size << std::endl;
-        const auto& qlast = result.crbegin();
-        std::cout << "Max Length = " << qlast->first << std::endl;
-        for (const auto qpt : qlast->second)
-        {
-            std::cout << qpt.row << "," << qpt.col << std::endl;
-        }
+        dump_match(maxlen, qpt, v1, v2);
     }
 }
 
 
-void test_str(const std::string& rs1, const std::string& rs2)
+void test_str_all(const std::string& rs1, const std::string& rs2)
 {
     sequtil::SeqMatch<char> seqx;
     std::vector<char> v1(rs1.size());
@@ -127,8 +136,73 @@ void test_str(const std::string& rs1, const std::string& rs2)
     std::copy(rs1.begin(), rs1.end(), v1.begin());
     std::copy(rs2.begin(), rs2.end(), v2.begin());
     sequtil::T_MAP_SZ2PT result;
-    seqx.run_all(v1, v2, result);
-    dump(v1, v2);
+    seqx.find_all(v1, v2, result);
+    dump_grid(v1, v2);
+}
+
+
+void test_str_max(const std::string& rs1, const std::string& rs2)
+{
+    std::cout << "-------------------" << std::endl;
+    std::cout << "[" << rs1 << "], [" << rs2 << "]" << std::endl;
+
+    std::vector<char> v1(rs1.size());
+    std::vector<char> v2(rs2.size());
+    std::copy(rs1.begin(), rs1.end(), v1.begin());
+    std::copy(rs2.begin(), rs2.end(), v2.begin());
+    
+    sequtil::SeqMatch<char> seqx;
+    sequtil::T_MAP_SZ2PT result;
+    seqx.find_max(v1, v2, result);
+    
+    if (result.empty())
+    {
+        std::cout << "empty" << std::endl;
+    }
+    else
+    {
+        const auto& qlast = result.crbegin();
+        size_t maxlen = qlast->first;
+        std::cout << "Max Length = " << maxlen << std::endl;
+        for (const auto qpt : qlast->second)
+        {
+            dump_match(maxlen, qpt, v1, v2);
+        }
+    }
+}
+
+
+void test_str_combos(void)
+{
+    test_str_max("", "ABCD");
+    test_str_max("ABCD", "");
+    test_str_max("WXYZ", "ABCDEFG");
+    test_str_max("ABCDEFG", "WXYZ");
+    
+    test_str_max("ABC", "ABCDEFG");
+    test_str_max("CDE", "ABCDEFG");
+    test_str_max("EFG", "ABCDEFG");
+    test_str_max("ABCDEFG", "ABC");
+    test_str_max("ABCDEFG", "CDE");
+    test_str_max("ABCDEFG", "EFG");
+    
+    test_str_max("ABCDEFG", "ABCDEFG");
+    test_str_max("AAAAAAA", "AAAAAAA");
+
+    test_str_max("AAA", "AAAAAAA");
+    test_str_max("AAAAAAA", "AAA");
+}
+
+
+void test_ran_sym(const int sym_ct)
+{
+    //test_random_char(12345, sym_ct, 100, 10);
+    //test_random_char(12345, sym_ct, 10, 100);
+    test_random_char(12345, sym_ct, 10000, 100);
+    test_random_char(12345, sym_ct, 100, 10000);
+    test_random_char(12345, sym_ct, 10000, 10000);
+    test_random_char(12345, sym_ct, 1000000, 1000);
+    test_random_char(12345, sym_ct, 1000, 1000000);
 }
 
 
@@ -136,7 +210,10 @@ int main()
 {
     std::cout << "Longest Common Sequence Finder\n";
 
-    test_str(
+    test_str_combos();
+    test_ran_sym(20);
+#if 0
+    test_str_all(
         "BBCCAAAAABBAAAA",
         "AAAAACCBBBBAAA");
 
@@ -147,6 +224,6 @@ int main()
     test_random_char(12345, sym_ct, 10000, 1000);
     test_random_char(12345, sym_ct, 10000, 10000);
     test_random_char(12345, sym_ct, 100000, 10000);
-
+#endif
     return 0;
 }

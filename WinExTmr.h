@@ -25,7 +25,8 @@
 
 // Mark Whitney 2021
 
-#pragma once
+#ifndef WIN_EX_TMR_H_
+#define WIN_EX_TMR_H_
 
 class WinExTmr
 {
@@ -36,7 +37,9 @@ public:
     void stop();
     double elapsed_time() const;
 private:
-    double f;
+    double freq;
     double t0;
     double t1;
 };
+
+#endif // WIN_EX_TMR_H_

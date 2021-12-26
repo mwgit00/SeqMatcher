@@ -25,7 +25,8 @@
 
 // Mark Whitney 2021
 
-#pragma once
+#ifndef SEQ_MATCH_H_
+#define SEQ_MATCH_H_
 
 #include <map>
 #include <vector>
@@ -69,18 +70,17 @@ namespace sequtil
     public:
         SeqMatch();
         virtual ~SeqMatch();
+
         void build_index(
             const std::vector<T>& rv1,
             std::unordered_map<T, T_VEC_SZ>& rmap);
-        void run_all(
+
+        void find_all(
             const std::vector<T>& rv1,
             const std::vector<T>& rv2,
             T_MAP_SZ2PT& rmatches);
-        void run_max(
-            const std::vector<T>& rv1,
-            const std::vector<T>& rv2,
-            T_MAP_SZ2PT& rmatches);
-        void run_max2(
+
+        void find_max(
             const std::vector<T>& rv1,
             const std::vector<T>& rv2,
             T_MAP_SZ2PT& rmatches);
@@ -124,7 +124,7 @@ namespace sequtil
 
 
     template <class T>
-    void SeqMatch<T>::run_all(
+    void SeqMatch<T>::find_all(
         const std::vector<T>& rv1,
         const std::vector<T>& rv2,
         T_MAP_SZ2PT& rmatches)
@@ -192,108 +192,7 @@ namespace sequtil
 
 
     template <class T>
-    void SeqMatch<T>::run_max(
-        const std::vector<T>& rv1,
-        const std::vector<T>& rv2,
-        T_MAP_SZ2PT& rmatches)
-    {
-        rmatches.clear();
-        max_map_size = 0;
-
-        std::unordered_map<T, T_VEC_SZ> map_sym1_to_pos;
-        std::map<T_PT, size_t, T_PT_Compare> map_pt_to_seqlen;
-
-        if ((rv1.size() == 0) || (rv2.size() == 0))
-        {
-            // solution is empty if either vector is empty
-            return;
-        }
-
-        // rv1 is the "horizontal" (column index) data
-        // create lookup table that maps each symbol
-        // to all the locations where it occurs
-
-        build_index(rv1, map_sym1_to_pos);
-
-        // rv2 is the "vertical" (row index) data
-        // traverse it and match each symbol against rv1
-
-        size_t max_len = 1;
-        for (size_t jj = 0; jj < rv2.size(); jj++)
-        {
-            const T_VEC_SZ& rpos = map_sym1_to_pos[rv2[jj]];
-            for (const auto& ix : rpos)
-            {
-                size_t linklen = 0;
-                if ((jj > 0) && (ix > 0))
-                {
-                    // check if this match is "diagonal link"
-                    // to an existing (old) sequence
-                    T_PTX ptx_old;
-                    ptx_old.pt.row = static_cast<uint32_t>(jj) - 1;
-                    ptx_old.pt.col = static_cast<uint32_t>(ix) - 1;
-                    T_PT key = ptx_old.pt;
-                    if (map_pt_to_seqlen.count(key))
-                    {
-                        // sequence can be extended
-                        // the old map entry can be removed
-                        linklen = map_pt_to_seqlen[key];
-                        map_pt_to_seqlen.erase(key);
-                    }
-                }
-                size_t newlinklen = 1 + linklen;
-                T_PTX ptx_new;
-                ptx_new.pt = { static_cast<uint32_t>(jj), static_cast<uint32_t>(ix) };
-                map_pt_to_seqlen.insert({ ptx_new.pt, newlinklen });
-                max_len = std::max<size_t>(max_len, newlinklen);
-            }
-
-            max_map_size = std::max<size_t>(max_map_size, map_pt_to_seqlen.size());
-
-            // remove dead ends
-            for (auto iter = map_pt_to_seqlen.begin(); iter != map_pt_to_seqlen.end(); )
-            {
-                if ((iter->second < max_len) && (jj > iter->first.row))
-                {
-                    T_PTX ptx;
-                    ptx.pt = iter->first;
-                    ptx.pt.row++;
-                    ptx.pt.col++;
-                    if (map_pt_to_seqlen.count(ptx.pt) == 0)
-                    {
-                        // this point can't be part of a sequence
-                        // longer than the current max so delete it
-                        iter = map_pt_to_seqlen.erase(iter);
-                    }
-                    else
-                    {
-                        iter++;
-                    }
-                }
-                else
-                {
-                    iter++;
-                }
-            }
-        }
-
-        // collect the data for the longest sequence(s)
-        rmatches.clear();
-        rmatches.insert({ max_len, {} });
-        for (const auto& r : map_pt_to_seqlen)
-        {
-            if (r.second == max_len)
-            {
-                T_PTX ptx;
-                ptx.pt = r.first;
-                rmatches[max_len].push_back(ptx.pt);
-            }
-        }
-    }
-
-
-    template <class T>
-    void SeqMatch<T>::run_max2(
+    void SeqMatch<T>::find_max(
         const std::vector<T>& rv1,
         const std::vector<T>& rv2,
         T_MAP_SZ2PT& rmatches)
@@ -380,17 +279,22 @@ namespace sequtil
             }
         }
 
-        // collect the data for the longest sequence(s)
-        rmatches.clear();
-        rmatches.insert({ max_len, {} });
-        for (const auto& r : map_pt_to_seqlen)
+        // collect the data for the longest sequence
+        // there may be multiple sequences of that same length
+        if (map_pt_to_seqlen.size() > 0)
         {
-            if (r.second == max_len)
+            rmatches.insert({ max_len, {} });
+            for (const auto& r : map_pt_to_seqlen)
             {
-                T_PTX ptx;
-                ptx.rowcol = r.first;
-                rmatches[max_len].push_back(ptx.pt);
+                if (r.second == max_len)
+                {
+                    T_PTX ptx;
+                    ptx.rowcol = r.first;
+                    rmatches[max_len].push_back(ptx.pt);
+                }
             }
         }
     }
 }
+
+#endif // SEQ_MATCH_H_

@@ -33,7 +33,7 @@ WinExTmr::WinExTmr()
 {
     LARGE_INTEGER ifreq;
     QueryPerformanceFrequency(&ifreq);
-    f = static_cast<double>(ifreq.QuadPart);
+    freq = static_cast<double>(ifreq.QuadPart);
     t0 = 0.0;
     t1 = 0.0;
 }
@@ -47,14 +47,14 @@ void WinExTmr::start()
 {
     LARGE_INTEGER itime;
     QueryPerformanceCounter(&itime);
-    t0 = static_cast<double>(itime.QuadPart) / f;
+    t0 = static_cast<double>(itime.QuadPart) / freq;
 }
 
 void WinExTmr::stop()
 {
     LARGE_INTEGER itime;
     QueryPerformanceCounter(&itime);
-    t1 = static_cast<double>(itime.QuadPart) / f;
+    t1 = static_cast<double>(itime.QuadPart) / freq;
 }
 
 double WinExTmr::elapsed_time() const
