@@ -34,21 +34,41 @@
 
 void dump_grid(const std::vector<char>& rv1, std::vector<char>& rv2)
 {
-    std::cout << "  ";
+    int ii;
+    std::cout << std::endl;
+
+    ii = 0;
+    std::cout << "   ";
+    for (const auto& c1 : rv1)
+    {
+        char cc = '0' + (ii % 10);
+        if (cc == '0') cc = '.';
+        std::cout << cc;
+        ii++;
+    }
+    std::cout << std::endl;
+
+    std::cout << "   ";
     for (const auto& c1 : rv1)
     {
         std::cout << c1;
     }
     std::cout << std::endl;
 
+    ii = 0;
     for (const auto& c2 : rv2)
     {
+        char cc = '0' + (ii % 10);
+        if (cc == '0') cc = '.';
+        std::cout << cc;
+
         std::cout << c2 << " ";
         for (const auto& c1 : rv1)
         {
             std::cout << ((c1 == c2) ? '@' : '+');
         }
         std::cout << std::endl;
+        ii++;
     }
     std::cout << std::endl;
 }
@@ -94,6 +114,7 @@ void test_random_char(
     std::vector<char> v1(n1);
     std::vector<char> v2(n2);
 
+    // fill the shortest vector first
     if (n1 < n2)
     {
         for (size_t ii = 0; ii < n1; ii++) v1[ii] = 'A' + (rand() % sym_ct);
@@ -128,29 +149,25 @@ void test_random_char(
 }
 
 
-void test_str_all(const std::string& rs1, const std::string& rs2)
-{
-    sequtil::SeqMatch<char> seqx;
-    std::vector<char> v1(rs1.size());
-    std::vector<char> v2(rs2.size());
-    std::copy(rs1.begin(), rs1.end(), v1.begin());
-    std::copy(rs2.begin(), rs2.end(), v2.begin());
-    sequtil::T_MAP_SZ2PT result;
-    seqx.find_all(v1, v2, result);
-    dump_grid(v1, v2);
-}
-
-
-void test_str_max(const std::string& rs1, const std::string& rs2)
+void test_str_max(
+    const std::string& rs1,
+    const std::string& rs2,
+    const bool is_dump = false)
 {
     std::cout << "-------------------" << std::endl;
+
     std::cout << "[" << rs1 << "], [" << rs2 << "]" << std::endl;
 
     std::vector<char> v1(rs1.size());
     std::vector<char> v2(rs2.size());
     std::copy(rs1.begin(), rs1.end(), v1.begin());
     std::copy(rs2.begin(), rs2.end(), v2.begin());
-    
+
+    if (is_dump)
+    {
+        dump_grid(v1, v2);
+    }
+
     sequtil::SeqMatch<char> seqx;
     sequtil::T_MAP_SZ2PT result;
     seqx.find_max(v1, v2, result);
@@ -174,6 +191,8 @@ void test_str_max(const std::string& rs1, const std::string& rs2)
 
 void test_str_combos(void)
 {
+    test_str_max("BBCCAAAAABBAAAA", "AAAAACCBBBBAAA", true);
+
     test_str_max("", "ABCD");
     test_str_max("ABCD", "");
     test_str_max("WXYZ", "ABCDEFG");
@@ -196,34 +215,50 @@ void test_str_combos(void)
 
 void test_ran_sym(const int sym_ct)
 {
-    //test_random_char(12345, sym_ct, 100, 10);
-    //test_random_char(12345, sym_ct, 10, 100);
-    test_random_char(12345, sym_ct, 10000, 100);
-    test_random_char(12345, sym_ct, 100, 10000);
-    test_random_char(12345, sym_ct, 10000, 10000);
-    test_random_char(12345, sym_ct, 1000000, 1000);
+    test_random_char(12345, 2, 100, 24, true);
+
+    // smallest vector should be first
+    test_random_char(12345, sym_ct, 1000, 1000);
+    test_random_char(12345, sym_ct, 1000, 10000);
+    test_random_char(12345, sym_ct, 1000, 100000);
     test_random_char(12345, sym_ct, 1000, 1000000);
 }
 
 
-int main()
+int main(int argc, char * argv[])
 {
     std::cout << "Longest Common Sequence Finder\n";
 
-    test_str_combos();
-    test_ran_sym(20);
-#if 0
-    test_str_all(
-        "BBCCAAAAABBAAAA",
-        "AAAAACCBBBBAAA");
-
-    test_random_char(12345, 2, 100, 24, true);
-
     int sym_ct = 20;
-    test_random_char(12345, sym_ct, 1000, 1000);
-    test_random_char(12345, sym_ct, 10000, 1000);
-    test_random_char(12345, sym_ct, 10000, 10000);
-    test_random_char(12345, sym_ct, 100000, 10000);
-#endif
+    int nsquare = 10;
+    bool is_square = false;
+
+    if (argc >= 2)
+    {
+        sym_ct = atoi(argv[1]);
+        sym_ct = std::max<int>(2, sym_ct);
+        sym_ct = std::min<int>(sym_ct, 100);
+    }
+
+    if (argc >= 3)
+    {
+        is_square = true;
+        nsquare = atoi(argv[2]);
+        nsquare = std::max<int>(10, nsquare);
+        nsquare = std::min<int>(nsquare, 1000000);
+    }
+
+    if (is_square)
+    {
+        std::cout << "Random " << nsquare << "x" << nsquare;
+        std::cout << " with " << sym_ct << " symbols" << std::endl;
+        test_random_char(12345, sym_ct, nsquare, nsquare, (nsquare <= 40));
+    }
+    else
+    {
+        test_str_combos();
+        test_ran_sym(sym_ct);
+    }
+
     return 0;
 }
