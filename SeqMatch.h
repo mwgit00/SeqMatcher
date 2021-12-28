@@ -63,9 +63,14 @@ namespace sequtil
 
         void build_index(
             const std::vector<T>& rv1,
-            std::map<T, T_VEC_SZ>& rmap);
+            std::unordered_map<T, T_VEC_SZ>& rmap);
 
         void find_max(
+            const std::vector<T>& rv1,
+            const std::vector<T>& rv2,
+            T_MAP_SZ2PT& rmatches);
+
+        void find_max3(
             const std::vector<T>& rv1,
             const std::vector<T>& rv2,
             T_MAP_SZ2PT& rmatches);
@@ -81,7 +86,7 @@ namespace sequtil
     template <class T>
     void SeqMatch<T>::build_index(
         const std::vector<T>& rv,
-        std::map<T, T_VEC_SZ>& rmap)
+        std::unordered_map<T, T_VEC_SZ>& rmap)
     {
         rmap.clear();
         for (size_t ii = 0; ii < rv.size(); ii++)
@@ -129,9 +134,8 @@ namespace sequtil
         rmatches.clear();
         max_map_size = 0;
 
-        std::map<T, T_VEC_SZ> map_sym1_to_pos;
+        std::unordered_map<T, T_VEC_SZ> map_sym1_to_pos;
         std::unordered_map<uint64_t, size_t> map_pt_to_seqlen;
-        //map_pt_to_seqlen.rehash(rv1.size() / 4);
 
         if ((rv1.size() == 0) || (rv2.size() == 0))
         {
@@ -188,18 +192,7 @@ namespace sequtil
                 ptx_key.rowcol = iter->first;
                 if ((ptx_key.pt.row < jj) && (iter->second < max_len))
                 {
-                    ptx_key.pt.row++;
-                    ptx_key.pt.col++;
-                    if (map_pt_to_seqlen.count(ptx_key.rowcol) == 0)
-                    {
-                        // this point can't be part of a sequence
-                        // longer than the current max so delete it
-                        iter = map_pt_to_seqlen.erase(iter);
-                    }
-                    else
-                    {
-                        iter++;
-                    }
+                    iter = map_pt_to_seqlen.erase(iter);
                 }
                 else
                 {
@@ -229,6 +222,124 @@ namespace sequtil
         index_max_load_factor = map_pt_to_seqlen.max_load_factor();
         index_bucket_count = map_pt_to_seqlen.bucket_count();
 #endif
+    }
+
+
+    template <class T>
+    void SeqMatch<T>::find_max3(
+        const std::vector<T>& rv1,
+        const std::vector<T>& rv2,
+        T_MAP_SZ2PT& rmatches)
+    {
+        rmatches.clear();
+        max_map_size = 0;
+
+        std::map<T, T_VEC_SZ> map_sym1_to_pos;
+        std::unordered_map<size_t, std::unordered_map<size_t, size_t>> map_work;
+
+        if ((rv1.size() == 0) || (rv2.size() == 0))
+        {
+            // solution is empty if either vector is empty
+            return;
+        }
+
+        // rv1 is the "horizontal" (column index) data
+        // create lookup table that maps each symbol
+        // to all the locations where it occurs
+
+        build_index(rv1, map_sym1_to_pos);
+
+        // rv2 is the "vertical" (row index) data
+        // traverse it and match each symbol against rv1
+
+        size_t max_len = 1;
+        for (size_t jj = 0; jj < rv2.size(); jj++)
+        {
+            const T_VEC_SZ& rpos = map_sym1_to_pos[rv2[jj]];
+            for (const auto ix : rpos)
+            {
+                // check if this match is "diagonal link"
+                // to an existing sequence record in map
+                // if jj or ix is 0 the key will be bogus but that's okay
+                size_t linklen = 0;
+                size_t row = static_cast<uint32_t>(jj) - 1;
+                size_t col = static_cast<uint32_t>(ix) - 1;
+                auto iter_row = map_work.find(row);
+                if (iter_row != map_work.end())
+                {
+                    auto& rmap = iter_row->second;
+                    auto iter_col = rmap.find(col);
+                    if (iter_col != rmap.end())
+                    {
+                        // sequence can be extended
+                        // the old map entry can be removed
+                        linklen = iter_col->second;
+                        rmap.erase(iter_col);
+                        if (rmap.size() == 0)
+                        {
+                            map_work.erase(iter_row);
+                        }
+                    }
+                }
+
+                // insert new link in sequence
+                // and update new max sequence length
+                size_t newlinklen = 1 + linklen;
+                map_work[jj][ix] = newlinklen;
+                max_len = std::max<size_t>(max_len, newlinklen);
+            }
+
+            // remove dead ends from previous rows
+            for (auto iter_row = map_work.begin(); iter_row != map_work.end(); )
+            {
+                if (iter_row->first == jj)
+                {
+                    break;
+                }
+
+                auto& rmap = iter_row->second;
+                for (auto iter_col = rmap.begin(); iter_col != rmap.end(); )
+                {
+                    if (iter_col->second < max_len)
+                    {
+                        iter_col = rmap.erase(iter_col);
+                    }
+                    else
+                    {
+                        iter_col++;
+                    }
+                }
+
+                if (rmap.size() == 0)
+                {
+                    iter_row = map_work.erase(iter_row);
+                }
+                else
+                {
+                    iter_row++;
+                }
+            }
+        }
+
+        // collect the data for the longest sequence
+        // there may be multiple sequences of that same length
+        if (map_work.size() > 0)
+        {
+            rmatches.insert({ max_len, {} });
+            for (const auto& rr : map_work)
+            {
+                for (const auto& rc : rr.second)
+                {
+                    if (rc.second == max_len)
+                    {
+                        T_PT pt;
+                        pt.row = static_cast<uint32_t>(rr.first);
+                        pt.col = static_cast<uint32_t>(rc.first);
+                        rmatches[max_len].push_back(pt);
+                    }
+                }
+            }
+        }
     }
 }
 

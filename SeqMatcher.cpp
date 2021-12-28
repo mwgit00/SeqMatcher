@@ -194,7 +194,7 @@ void test_str_max(
 
 void test_str_combos(void)
 {
-    test_str_max("BBCCAAAAABBAAAA", "AAAAACCBBBBAAA", true);
+    test_str_max("BBCCAAAAABBAAAA", "QAAAAACCBBBBAAA", true);
 
     test_str_max("", "ABCD");
     test_str_max("ABCD", "");
