@@ -138,6 +138,9 @@ void test_random_char(
     extmr.stop();
     std::cout << extmr.elapsed_time() << std::endl;
 
+    std::cout << seqx.index_load_factor << std::endl;
+    std::cout << seqx.index_max_load_factor << std::endl;
+    std::cout << seqx.index_bucket_count << std::endl;
     std::cout << "Max Map Sz = " << seqx.max_map_size << std::endl;
     const auto& qlast = result.crbegin();
     size_t maxlen = qlast->first;

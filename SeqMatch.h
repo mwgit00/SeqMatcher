@@ -54,7 +54,6 @@ namespace sequtil
     typedef std::vector<size_t> T_VEC_SZ;
     typedef std::map<size_t, T_VEC_PT> T_MAP_SZ2PT;
 
-
     template <class T>
     class SeqMatch
     {
@@ -64,7 +63,7 @@ namespace sequtil
 
         void build_index(
             const std::vector<T>& rv1,
-            std::unordered_map<T, T_VEC_SZ>& rmap);
+            std::map<T, T_VEC_SZ>& rmap);
 
         void find_max(
             const std::vector<T>& rv1,
@@ -72,6 +71,9 @@ namespace sequtil
             T_MAP_SZ2PT& rmatches);
 
     public:
+        float index_load_factor;
+        float index_max_load_factor;
+        size_t index_bucket_count;
         size_t max_map_size;
     };
 
@@ -79,7 +81,7 @@ namespace sequtil
     template <class T>
     void SeqMatch<T>::build_index(
         const std::vector<T>& rv,
-        std::unordered_map<T, T_VEC_SZ>& rmap)
+        std::map<T, T_VEC_SZ>& rmap)
     {
         rmap.clear();
         for (size_t ii = 0; ii < rv.size(); ii++)
@@ -92,11 +94,19 @@ namespace sequtil
             }
             rmap[rv[ii]].push_back(ii);
         }
+#if 0
+        index_load_factor = rmap.load_factor();
+        index_max_load_factor = rmap.max_load_factor();
+        index_bucket_count = rmap.bucket_count();
+#endif
     }
 
 
     template <class T>
     SeqMatch<T>::SeqMatch() :
+        index_load_factor(0.0),
+        index_max_load_factor(0.0),
+        index_bucket_count(0),
         max_map_size(0)
     {
 
@@ -119,8 +129,9 @@ namespace sequtil
         rmatches.clear();
         max_map_size = 0;
 
-        std::unordered_map<T, T_VEC_SZ> map_sym1_to_pos;
+        std::map<T, T_VEC_SZ> map_sym1_to_pos;
         std::unordered_map<uint64_t, size_t> map_pt_to_seqlen;
+        //map_pt_to_seqlen.rehash(rv1.size() / 4);
 
         if ((rv1.size() == 0) || (rv2.size() == 0))
         {
@@ -150,13 +161,13 @@ namespace sequtil
                 T_PTX ptx;
                 ptx.pt.row = static_cast<uint32_t>(jj) - 1;
                 ptx.pt.col = static_cast<uint32_t>(ix) - 1;
-                uint64_t key = ptx.rowcol;
-                if (map_pt_to_seqlen.count(key))
+                auto iter = map_pt_to_seqlen.find(ptx.rowcol);
+                if (iter != map_pt_to_seqlen.end())
                 {
                     // sequence can be extended
                     // the old map entry can be removed
-                    linklen = map_pt_to_seqlen[key];
-                    map_pt_to_seqlen.erase(key);
+                    linklen = iter->second;
+                    map_pt_to_seqlen.erase(iter);
                 }
 
                 // insert new link in sequence
@@ -164,7 +175,7 @@ namespace sequtil
                 size_t newlinklen = 1 + linklen;
                 ptx.pt.row++;
                 ptx.pt.col++;
-                map_pt_to_seqlen.insert({ ptx.rowcol, newlinklen });
+                map_pt_to_seqlen.emplace(std::make_pair(ptx.rowcol, newlinklen));
                 max_len = std::max<size_t>(max_len, newlinklen);
             }
 
@@ -175,7 +186,7 @@ namespace sequtil
             {
                 T_PTX ptx_key;
                 ptx_key.rowcol = iter->first;
-                if ((iter->second < max_len) && (ptx_key.pt.row < jj))
+                if ((ptx_key.pt.row < jj) && (iter->second < max_len))
                 {
                     ptx_key.pt.row++;
                     ptx_key.pt.col++;
@@ -212,6 +223,12 @@ namespace sequtil
                 }
             }
         }
+
+#if 1
+        index_load_factor = map_pt_to_seqlen.load_factor();
+        index_max_load_factor = map_pt_to_seqlen.max_load_factor();
+        index_bucket_count = map_pt_to_seqlen.bucket_count();
+#endif
     }
 }
 
