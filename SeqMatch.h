@@ -76,10 +76,9 @@ namespace sequtil
             T_MAP_SZ2PT& rmatches);
 
     public:
-        float index_load_factor;
-        float index_max_load_factor;
-        size_t index_bucket_count;
-        size_t max_map_size;
+        float ptmap_load_fac;
+        size_t ptmap_bucket_ct;
+        size_t ptmap_max_sz;
     };
 
 
@@ -101,7 +100,6 @@ namespace sequtil
         }
 #if 0
         index_load_factor = rmap.load_factor();
-        index_max_load_factor = rmap.max_load_factor();
         index_bucket_count = rmap.bucket_count();
 #endif
     }
@@ -109,10 +107,9 @@ namespace sequtil
 
     template <class T>
     SeqMatch<T>::SeqMatch() :
-        index_load_factor(0.0),
-        index_max_load_factor(0.0),
-        index_bucket_count(0),
-        max_map_size(0)
+        ptmap_load_fac(0.0),
+        ptmap_bucket_ct(0),
+        ptmap_max_sz(0)
     {
 
     }
@@ -132,7 +129,7 @@ namespace sequtil
         T_MAP_SZ2PT& rmatches)
     {
         rmatches.clear();
-        max_map_size = 0;
+        ptmap_max_sz = 0;
 
         std::unordered_map<T, T_VEC_SZ> map_sym1_to_pos;
         std::unordered_map<uint64_t, size_t> map_pt_to_seqlen;
@@ -183,15 +180,17 @@ namespace sequtil
                 max_len = std::max<size_t>(max_len, newlinklen);
             }
 
-            max_map_size = std::max<size_t>(max_map_size, map_pt_to_seqlen.size());
+            ptmap_max_sz = std::max<size_t>(ptmap_max_sz, map_pt_to_seqlen.size());
 
-            // remove dead ends from previous rows
+            // any map entries associated with previous rows could be dead ends
+            // so go through the map and delete any that are shorter than current max
             for (auto iter = map_pt_to_seqlen.begin(); iter != map_pt_to_seqlen.end(); )
             {
                 T_PTX ptx_key;
                 ptx_key.rowcol = iter->first;
                 if ((ptx_key.pt.row < jj) && (iter->second < max_len))
                 {
+                    // this is an entry for a previous row and it is too short
                     iter = map_pt_to_seqlen.erase(iter);
                 }
                 else
@@ -217,129 +216,8 @@ namespace sequtil
             }
         }
 
-#if 1
-        index_load_factor = map_pt_to_seqlen.load_factor();
-        index_max_load_factor = map_pt_to_seqlen.max_load_factor();
-        index_bucket_count = map_pt_to_seqlen.bucket_count();
-#endif
-    }
-
-
-    template <class T>
-    void SeqMatch<T>::find_max3(
-        const std::vector<T>& rv1,
-        const std::vector<T>& rv2,
-        T_MAP_SZ2PT& rmatches)
-    {
-        rmatches.clear();
-        max_map_size = 0;
-
-        std::map<T, T_VEC_SZ> map_sym1_to_pos;
-        std::unordered_map<size_t, std::unordered_map<size_t, size_t>> map_work;
-
-        if ((rv1.size() == 0) || (rv2.size() == 0))
-        {
-            // solution is empty if either vector is empty
-            return;
-        }
-
-        // rv1 is the "horizontal" (column index) data
-        // create lookup table that maps each symbol
-        // to all the locations where it occurs
-
-        build_index(rv1, map_sym1_to_pos);
-
-        // rv2 is the "vertical" (row index) data
-        // traverse it and match each symbol against rv1
-
-        size_t max_len = 1;
-        for (size_t jj = 0; jj < rv2.size(); jj++)
-        {
-            const T_VEC_SZ& rpos = map_sym1_to_pos[rv2[jj]];
-            for (const auto ix : rpos)
-            {
-                // check if this match is "diagonal link"
-                // to an existing sequence record in map
-                // if jj or ix is 0 the key will be bogus but that's okay
-                size_t linklen = 0;
-                size_t row = static_cast<uint32_t>(jj) - 1;
-                size_t col = static_cast<uint32_t>(ix) - 1;
-                auto iter_row = map_work.find(row);
-                if (iter_row != map_work.end())
-                {
-                    auto& rmap = iter_row->second;
-                    auto iter_col = rmap.find(col);
-                    if (iter_col != rmap.end())
-                    {
-                        // sequence can be extended
-                        // the old map entry can be removed
-                        linklen = iter_col->second;
-                        rmap.erase(iter_col);
-                        if (rmap.size() == 0)
-                        {
-                            map_work.erase(iter_row);
-                        }
-                    }
-                }
-
-                // insert new link in sequence
-                // and update new max sequence length
-                size_t newlinklen = 1 + linklen;
-                map_work[jj][ix] = newlinklen;
-                max_len = std::max<size_t>(max_len, newlinklen);
-            }
-
-            // remove dead ends from previous rows
-            for (auto iter_row = map_work.begin(); iter_row != map_work.end(); )
-            {
-                if (iter_row->first == jj)
-                {
-                    break;
-                }
-
-                auto& rmap = iter_row->second;
-                for (auto iter_col = rmap.begin(); iter_col != rmap.end(); )
-                {
-                    if (iter_col->second < max_len)
-                    {
-                        iter_col = rmap.erase(iter_col);
-                    }
-                    else
-                    {
-                        iter_col++;
-                    }
-                }
-
-                if (rmap.size() == 0)
-                {
-                    iter_row = map_work.erase(iter_row);
-                }
-                else
-                {
-                    iter_row++;
-                }
-            }
-        }
-
-        // collect the data for the longest sequence
-        // there may be multiple sequences of that same length
-        if (map_work.size() > 0)
-        {
-            rmatches.insert({ max_len, {} });
-            for (const auto& rr : map_work)
-            {
-                for (const auto& rc : rr.second)
-                {
-                    if (rc.second == max_len)
-                    {
-                        T_PT pt;
-                        pt.row = static_cast<uint32_t>(rr.first);
-                        pt.col = static_cast<uint32_t>(rc.first);
-                        rmatches[max_len].push_back(pt);
-                    }
-                }
-            }
-        }
+        ptmap_load_fac = map_pt_to_seqlen.load_factor();
+        ptmap_bucket_ct = map_pt_to_seqlen.bucket_count();
     }
 }
 

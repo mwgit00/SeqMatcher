@@ -138,10 +138,9 @@ void test_random_char(
     extmr.stop();
     std::cout << extmr.elapsed_time() << std::endl;
 
-    std::cout << seqx.index_load_factor << std::endl;
-    std::cout << seqx.index_max_load_factor << std::endl;
-    std::cout << seqx.index_bucket_count << std::endl;
-    std::cout << "Max Map Sz = " << seqx.max_map_size << std::endl;
+    std::cout << "Load Fac =   " << seqx.ptmap_load_fac << std::endl;
+    std::cout << "Bucket Ct =  " << seqx.ptmap_bucket_ct << std::endl;
+    std::cout << "Max Map Sz = " << seqx.ptmap_max_sz << std::endl;
     const auto& qlast = result.crbegin();
     size_t maxlen = qlast->first;
     std::cout << "Max Length = " << maxlen << std::endl;
@@ -194,7 +193,7 @@ void test_str_max(
 
 void test_str_combos(void)
 {
-    test_str_max("BBCCAAAAABBAAAA", "QAAAAACCBBBBAAA", true);
+    test_str_max("BBCCAAAAABBAAAA", "AAAAACCBBBBAAA", true);
 
     test_str_max("", "ABCD");
     test_str_max("ABCD", "");
@@ -213,6 +212,9 @@ void test_str_combos(void)
 
     test_str_max("AAA", "AAAAAAA");
     test_str_max("AAAAAAA", "AAA");
+
+    test_str_max("ABCDEFGHI", "ABCWDEFXGHIYABCWDEFXGHI");
+    test_str_max("ABCDEFGHI", "ABCWWWBCDEXXXCDEFGHYYYDEFGHI");
 }
 
 
@@ -233,8 +235,9 @@ int main(int argc, char * argv[])
     std::cout << "Longest Common Sequence Finder\n";
 
     int sym_ct = 20;
-    int nsquare = 10;
-    bool is_square = false;
+    int n1 = 100;
+    int n2 = 100;
+    bool is_custom = false;
 
     if (argc >= 2)
     {
@@ -245,17 +248,26 @@ int main(int argc, char * argv[])
 
     if (argc >= 3)
     {
-        is_square = true;
-        nsquare = atoi(argv[2]);
-        nsquare = std::max<int>(10, nsquare);
-        nsquare = std::min<int>(nsquare, 1000000);
+        is_custom = true;
+        n1 = atoi(argv[2]);
+        n1 = std::max<int>(10, n1);
+        n1 = std::min<int>(n1, 1000000);
+        n2 = n1;
     }
 
-    if (is_square)
+    if (argc >= 4)
     {
-        std::cout << "Random " << nsquare << "x" << nsquare;
+        is_custom = true;
+        n2 = atoi(argv[3]);
+        n2 = std::max<int>(10, n2);
+        n2 = std::min<int>(n2, 1000000);
+    }
+
+    if (is_custom)
+    {
+        std::cout << "Random " << n1 << "x" << n2;
         std::cout << " with " << sym_ct << " symbols" << std::endl;
-        test_random_char(12345, sym_ct, nsquare, nsquare, (nsquare <= 40));
+        test_random_char(12345, sym_ct, n1, n2, (n1 <= 80) && (n2 <= 32));
     }
     else
     {
